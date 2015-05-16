@@ -30,24 +30,23 @@ class streamerControler:
         self.workers={}
         self.appindicator=None
 
-        self.configFile=kwargs.get("configFile",expanduser("~/.config/streamripper_tray.conf"))
+        self.configFile=expanduser(kwargs.get("configFile","~/.config/streamripper_tray.conf"))
         config=kwargs.get("config",{})
 
         #get config
         if config=={}:
             self.config=ConfigParser.ConfigParser()
             self.config.read([self.configFile])
-            print self.config
+            print "actual config from streamerControler:\n %s with sections=%s" % (self.config,self.config.sections())
 
         self.parse_config()
-        self.start_tray()
 
 
     def parse_config(self):
         for s in self.config.sections() :
+
             if s !="general":
-                t=threading.Thread(target=streamerWorker,name=s,args=(s,self))
-                t.start()
+                self.workers[s]=streamerWorker(s,self)
 
     def start_tray(self):
         self.appindicator=gui.Trayicon(self)
@@ -57,14 +56,19 @@ class streamerWorker():
         self.name=workerName
         self.controler=controler
         self.config={}
+        self.running=0
+        self.status="stopped"
 
         self.total_size=0
         self.total_count=0
 
         self.actual={}
 
+        self.controler.workers[workerName]=self
         self.parse_config(controler.config)
-        self.start()
+
+        if self.config["autostart"] in ["True","true"]:
+            self.start()
 
     def parse_config(self,config):
         for section in ["general",self.name]:
@@ -72,10 +76,21 @@ class streamerWorker():
             print ("worker='%s' config=%s'" % (self.name,self.config))
 
     def start(self):
+        self.thread=threading.Thread(target=self.run,name=self.name)
+        self.thread.start()
+        self.status="running"
+        self.running=True
+
+    def stop(self):
+        #self.thread.
+        self.status="stopped"
+        self.running=False
+
+    def run(self):
         #print self.config["url"],self.config["options"],"-d",self.config["output_directory"]
         process=subprocess.Popen(["streamripper", self.config["url"],self.config["options"],"-d",self.config["output_directory"]],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-        while True:
+        while self.running==True:
             out=process.stdout.readline()
             if len(out)==0:
                 break
@@ -95,9 +110,6 @@ class streamerWorker():
                 if new["status"]=="ripping":
                     self.song_changed(new)
 
-
-
-
     def song_changed(self,new_props):
         self.actual=new_props
         self.total_count+=1
@@ -105,9 +117,9 @@ class streamerWorker():
         print self.get_status()
 
     def get_status(self):
-        row={}
+        row={"Stream":self.name}
         row.update(self.actual)
-        row.update({"total_size":humanfriendly.format_size(self.total_size),"total_count":self.total_count})
+        row.update({"running":self.running,"status":self.status,"total_size":humanfriendly.format_size(self.total_size),"total_count":self.total_count})
         return row
 
     def get_sizeInBytes(self,sizeInString):

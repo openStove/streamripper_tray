@@ -26,8 +26,8 @@ class statusWindow(Gtk.Window):
         self.stream_header=None
         self.streams=[]
 
-        self.connect("delete_event", self.delete_event)
-        self.connect("destroy", self.destroy)
+        #self.connect("delete_event", self.delete_event)
+        #self.connect("destroy", self.destroy)
 
 
         self.box = Gtk.ListBox()
@@ -35,27 +35,13 @@ class statusWindow(Gtk.Window):
 
         self.status_grid=statusGrid(self)
         self.box.add(self.status_grid)
-        self.status_grid.add_header(['status','author','title', 'total_size','total_count', 'size'])
+        self.status_grid.add_header(['Stream','status','total_size','total_count'])
 
-        for cs in self.controller.workers:
-            print "worker name=%s" % cs.name
-            self.status_grid.add_stream(cs.get_status())
+        print "there is currently %s workers" % len(self.controller.workers)
+        for k,cs in self.controller.workers.items():
+            self.status_grid.add_stream(cs)
 
-
-
-
-
-    def on_button1_clicked(self, widget):
-        print("Hello")
-
-    def on_button2_clicked(self, widget):
-        print("Goodbye")
-
-    def delete_event(self, widget, event, data=None):
-        return False
-
-    def destroy(self, widget, data=None):
-        pass
+        self.show_all()
 
 
 
@@ -70,6 +56,7 @@ class statusGrid(Gtk.Grid):
 
 
     def add_header(self,labels):
+        self.headerFields=labels
         i=1
         for k  in labels:
             l=Gtk.Label(k)
@@ -78,15 +65,33 @@ class statusGrid(Gtk.Grid):
             self.header_col[k]=i
             i+=1
 
-    def add_stream(self,props):
+    def add_stream(self,stream):
+        props=stream.get_status()
         myLabels={}
         row=len(self.streams)+2
         for k,v in props.items():
-            l=Gtk.Label(v)
-            l.set_justify=Gtk.Justification.LEFT
-            self.attach(l,self.header_col[k],row,1,1)
-            myLabels[k]=l
+            if k in self.headerFields:
+                l=Gtk.Label(v)
+                l.set_justify=Gtk.Justification.LEFT
+                self.attach(l,self.header_col[k],row,1,1)
+                myLabels[k]=l
         self.streams[props["Stream"]]=myLabels
+
+        #add toggle button
+        switch = Gtk.Switch()
+        switch.connect("notify::active", self.on_switch_stream)
+        switch.set_active(props["running"])
+        switch.slider_width = 5
+        myLabels["running"]=switch
+        self.attach(switch,len(myLabels)+1,row,1,1)
+
+    def on_switch_stream(self,switch, gparam):
+        print "switch=%s stream=%s" % (switch,gparam)
+        target_state=switch.get_active()
+        if target_state==True:
+            pass
+        else :
+            pass
 
     def update_stream(self,streamName,props):
         try:
@@ -99,15 +104,13 @@ class statusGrid(Gtk.Grid):
 
 
 
-
 class Trayicon (GObject.Object):
     def __init__(self,controller=None):
         self.controller=controller
         self.element=None
         self.active=False
 
-        if self.controller==None:
-            self.start_controller()
+
 
         __gtype_name__ = 'TrayiconPlugin'
         object = GObject.property (type=GObject.Object)
@@ -132,6 +135,7 @@ class Trayicon (GObject.Object):
             self.element=statusWindow(self.controller)
         self.element.show_all()
         #self.element.destroy()
+        self.element=None
 
 
 
@@ -182,28 +186,44 @@ class Trayicon (GObject.Object):
         about_dialog.run()
         about_dialog.destroy()
 
-    def start_controller(self):
+    def start_controller(self,**kwargs):
 
+        if self.controller==None:
+            print "creating controller"
+            self.controller=src.streamerControler(**kwargs)
+
+
+
+class Error(Exception):
+    pass
+
+class StartController(Error):
+    def __init__(self, expr, msg):
+        self.expr = expr
+        self.msg = msg
 
 def main(argv):
-   configFile=None
+    configFile=None
 
-   try:
-      opts, args = getopt.getopt(argv,"hc:",["config="])
-      usage='streamripper_tray.py -c <configFile> '
-   except getopt.GetoptError:
-      print usage
-      sys.exit(2)
-   for opt, arg in opts:
-      if opt == '-h':
-         print usage
-         sys.exit()
-      elif opt in ("-c", "--config"):
-         configFile = arg
+    try:
+        opts, args = getopt.getopt(argv,"hc:",["config="])
+        usage='streamripper_tray.py -c <configFile> '
 
-   print 'Config File is %s' % configFile
+    except getopt.GetoptError:
+        print usage
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == '-h':
+            print usage
+            sys.exit()
+        elif opt in ("-c", "--config"):
+            configFile = arg
+            print 'Config File is %s' % configFile
+            mytray=Trayicon()
+            mytray.start_controller(configFile=configFile)
+            Gtk.main()
+
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-    Trayicon()
-    Gtk.main()
