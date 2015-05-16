@@ -1,6 +1,19 @@
-__author__ = 'wsb'
+__author__ = 'OpenStove'
 #!/usr/bin/env python
+"""
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
 
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 import sys
 from gi.repository import Gtk,GObject
 
@@ -149,7 +162,7 @@ class Trayicon (GObject.Object):
         about_dialog.set_destroy_with_parent(True)
         about_dialog.set_name("StreamRipper Tray")
         about_dialog.set_version("0.1")
-        about_dialog.set_authors(["Sebastien Brennion"])
+        about_dialog.set_authors(["Open Stove"])
 
         about_dialog.run()
         about_dialog.destroy()
