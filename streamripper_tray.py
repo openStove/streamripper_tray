@@ -14,9 +14,9 @@ __author__ = 'OpenStove'
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-import sys
+import sys, getopt
 from gi.repository import Gtk,GObject
-
+import streamripper_controller as src
 from time import sleep
 
 class statusWindow(Gtk.Window):
@@ -25,6 +25,9 @@ class statusWindow(Gtk.Window):
         self.controller=controller
         self.stream_header=None
         self.streams=[]
+
+        self.connect("delete_event", self.delete_event)
+        self.connect("destroy", self.destroy)
 
 
         self.box = Gtk.ListBox()
@@ -37,7 +40,7 @@ class statusWindow(Gtk.Window):
         for cs in self.controller.workers:
             print "worker name=%s" % cs.name
             self.status_grid.add_stream(cs.get_status())
-        #self.add_stream()
+
 
 
 
@@ -48,6 +51,11 @@ class statusWindow(Gtk.Window):
     def on_button2_clicked(self, widget):
         print("Goodbye")
 
+    def delete_event(self, widget, event, data=None):
+        return False
+
+    def destroy(self, widget, data=None):
+        pass
 
 
 
@@ -80,18 +88,31 @@ class statusGrid(Gtk.Grid):
             myLabels[k]=l
         self.streams[props["Stream"]]=myLabels
 
+    def update_stream(self,streamName,props):
+        try:
+            ms=self.streams[streamName]
+            for k,v in props.items():
+                ms[k].set_text(v)
+        except :
+            raise
+
 
 
 
 
 class Trayicon (GObject.Object):
-    def __init__(self,controller):
+    def __init__(self,controller=None):
         self.controller=controller
         self.element=None
         self.active=False
+
+        if self.controller==None:
+            self.start_controller()
+
         __gtype_name__ = 'TrayiconPlugin'
         object = GObject.property (type=GObject.Object)
         self.do_activate()
+
 
 
     def do_activate (self):
@@ -100,32 +121,26 @@ class Trayicon (GObject.Object):
         self.staticon.connect ("activate", self.trayicon_activate)
         self.staticon.connect ("popup_menu", self.trayicon_popup)
         self.staticon.set_visible (True)
-        Gtk.main()
+
 
 
 
 
     def trayicon_activate (self, widget, data = None):
-
+        print "activate"
         if self.element==None :
             self.element=statusWindow(self.controller)
-
-        print "toggle app window! state=%s" % self.element.is_active()
         self.element.show_all()
-        if self.element.is_active():
+        #self.element.destroy()
 
-            self.element.show_all()
-        else :
-            pass
-            #self.element.hide_all()
 
 
 
 
     def trayicon_quit (self, widget, data = None):
         print "quit app!"
-        del self.controller
-        self.destroy()
+        Gtk.main_quit
+        #self.destroy()
 
 
 
@@ -139,7 +154,7 @@ class Trayicon (GObject.Object):
 
 
         menuitem_toggle.connect ("activate", self.trayicon_activate)
-        menuitem_quit.connect ("activate", self.trayicon_quit)
+        menuitem_quit.connect ("activate", Gtk.main_quit)
         menuitem_about.connect("activate",self.show_about_dialog)
 
 
@@ -166,3 +181,29 @@ class Trayicon (GObject.Object):
 
         about_dialog.run()
         about_dialog.destroy()
+
+    def start_controller(self):
+
+
+def main(argv):
+   configFile=None
+
+   try:
+      opts, args = getopt.getopt(argv,"hc:",["config="])
+      usage='streamripper_tray.py -c <configFile> '
+   except getopt.GetoptError:
+      print usage
+      sys.exit(2)
+   for opt, arg in opts:
+      if opt == '-h':
+         print usage
+         sys.exit()
+      elif opt in ("-c", "--config"):
+         configFile = arg
+
+   print 'Config File is %s' % configFile
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+    Trayicon()
+    Gtk.main()

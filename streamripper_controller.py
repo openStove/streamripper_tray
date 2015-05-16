@@ -22,11 +22,13 @@ import subprocess
 import sys
 import humanfriendly
 import time
-import streamripper_gui as gui
+import streamripper_tray as gui
+from gi.repository import Gtk
 
 class streamerControler:
     def __init__(self,**kwargs):
         self.workers={}
+        self.appindicator=None
 
         self.configFile=kwargs.get("configFile",expanduser("~/.config/streamripper_tray.conf"))
         config=kwargs.get("config",{})
@@ -120,3 +122,4 @@ class streamerWorker():
 
 if __name__ == '__main__':
     test=streamerControler()
+    Gtk.main()
