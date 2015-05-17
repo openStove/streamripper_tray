@@ -20,14 +20,15 @@ import streamripper_controller as src
 from time import sleep
 
 class statusWindow(Gtk.Window):
-    def __init__(self,controller):
+    def __init__(self,parent):
         Gtk.Window.__init__(self,title="StreamRipper Status")
-        self.controller=controller
+        self.controler=getattr(parent,"controler")
         self.stream_header=None
         self.streams=[]
 
+        self.set_position(Gtk.WindowPosition.CENTER)
         #self.connect("delete_event", self.delete_event)
-        #self.connect("destroy", self.destroy)
+        #self.connect('delete-event', lambda w, e: w.hide() or True)
 
 
         self.box = Gtk.ListBox()
@@ -36,12 +37,17 @@ class statusWindow(Gtk.Window):
         self.status_grid=statusGrid(self)
         self.box.add(self.status_grid)
         self.status_grid.add_header(['Stream','status','total_size','total_count'])
-
-        print "there is currently %s workers" % len(self.controller.workers)
-        for k,cs in self.controller.workers.items():
-            self.status_grid.add_stream(cs)
+        print self.controler
+        print "there is currently %s workers" % len(self.controler.workers)
+        print "worker items=%s" % self.controler.workers
+        for s in getattr(self.controler,"workers"):
+            print getattr(s,"name")
+            self.status_grid.add_stream(s)
 
         self.show_all()
+
+    def on_destroy(self,widget):
+        self.destroy(widget)
 
 
 
@@ -55,6 +61,7 @@ class statusGrid(Gtk.Grid):
         self.header_col={}
 
 
+
     def add_header(self,labels):
         self.headerFields=labels
         i=1
@@ -66,6 +73,7 @@ class statusGrid(Gtk.Grid):
             i+=1
 
     def add_stream(self,stream):
+        print stream
         props=stream.get_status()
         myLabels={}
         row=len(self.streams)+2
@@ -79,19 +87,19 @@ class statusGrid(Gtk.Grid):
 
         #add toggle button
         switch = Gtk.Switch()
-        switch.connect("notify::active", self.on_switch_stream)
+        switch.connect("notify::active", self.on_switch_stream,[stream])
         switch.set_active(props["running"])
         switch.slider_width = 5
-        myLabels["running"]=switch
-        self.attach(switch,len(myLabels)+1,row,1,1)
+        #myLabels["running"]=switch
+        #self.attach(switch,len(myLabels)+1,row,1,1)
 
-    def on_switch_stream(self,switch, gparam):
-        print "switch=%s stream=%s" % (switch,gparam)
+    def on_switch_stream(self,switch, gparam,stream):
+        print "switch=%s stream=%s" % (switch,stream[0])
         target_state=switch.get_active()
         if target_state==True:
-            pass
+            stream[0].start()
         else :
-            pass
+            stream[0].stop()
 
     def update_stream(self,streamName,props):
         try:
@@ -104,41 +112,29 @@ class statusGrid(Gtk.Grid):
 
 
 
-class Trayicon (GObject.Object):
-    def __init__(self,controller=None):
-        self.controller=controller
+class Trayicon (Gtk.StatusIcon):
+    def __init__(self,**kwargs):
         self.element=None
+        self.controler=None
         self.active=False
-
-
-
+        self.windows=[]
+        Gtk.StatusIcon.__init__(self)
+        self.start_controler(**kwargs)
         __gtype_name__ = 'TrayiconPlugin'
         object = GObject.property (type=GObject.Object)
-        self.do_activate()
 
-
-
-    def do_activate (self):
-        self.staticon = Gtk.StatusIcon ()
-        self.staticon.set_from_stock (Gtk.STOCK_ABOUT)
-        self.staticon.connect ("activate", self.trayicon_activate)
-        self.staticon.connect ("popup_menu", self.trayicon_popup)
-        self.staticon.set_visible (True)
+        self.set_from_stock (Gtk.STOCK_ABOUT)
+        self.connect ("activate", self.trayicon_activate)
+        self.connect ("popup_menu", self.trayicon_popup)
+        self.set_visible (True)
 
 
 
 
 
     def trayicon_activate (self, widget, data = None):
-        print "activate"
-        if self.element==None :
-            self.element=statusWindow(self.controller)
+        self.element=statusWindow(self)
         self.element.show_all()
-        #self.element.destroy()
-        self.element=None
-
-
-
 
 
     def trayicon_quit (self, widget, data = None):
@@ -158,7 +154,7 @@ class Trayicon (GObject.Object):
 
 
         menuitem_toggle.connect ("activate", self.trayicon_activate)
-        menuitem_quit.connect ("activate", Gtk.main_quit)
+        menuitem_quit.connect ("activate", self.do_deactivate)
         menuitem_about.connect("activate",self.show_about_dialog)
 
 
@@ -171,9 +167,11 @@ class Trayicon (GObject.Object):
         self.menu.popup(None, None, lambda w,x: self.staticon.position_menu(self.menu, self.staticon), self.staticon, 3, time)
 
 
-    def do_deactivate (self):
-        self.staticon.set_visible (False)
-        del self.staticon
+    def do_deactivate (self,qparam):
+        print "shut down"
+        Gtk.main_quit
+        self.controler.quit()
+        quit()
 
     def show_about_dialog(self, widget):
         about_dialog = Gtk.AboutDialog()
@@ -186,21 +184,14 @@ class Trayicon (GObject.Object):
         about_dialog.run()
         about_dialog.destroy()
 
-    def start_controller(self,**kwargs):
+    def start_controler(self,**kwargs):
 
-        if self.controller==None:
-            print "creating controller"
-            self.controller=src.streamerControler(**kwargs)
+        if self.controler==None:
+
+            self.controler=getattr(src,"streamerControler")(**kwargs)
+            print "creating controler %s" % self.controler
 
 
-
-class Error(Exception):
-    pass
-
-class StartController(Error):
-    def __init__(self, expr, msg):
-        self.expr = expr
-        self.msg = msg
 
 def main(argv):
     configFile=None
@@ -220,8 +211,8 @@ def main(argv):
         elif opt in ("-c", "--config"):
             configFile = arg
             print 'Config File is %s' % configFile
-            mytray=Trayicon()
-            mytray.start_controller(configFile=configFile)
+            mytray=Trayicon(configFile=configFile)
+            #mytray.start_controler()
             Gtk.main()
 
 

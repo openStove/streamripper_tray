@@ -25,9 +25,11 @@ import time
 import streamripper_tray as gui
 from gi.repository import Gtk
 
+class StopThread(StopIteration): pass
+
 class streamerControler:
     def __init__(self,**kwargs):
-        self.workers={}
+        self.workers=[]
         self.appindicator=None
 
         self.configFile=expanduser(kwargs.get("configFile","~/.config/streamripper_tray.conf"))
@@ -46,10 +48,19 @@ class streamerControler:
         for s in self.config.sections() :
 
             if s !="general":
-                self.workers[s]=streamerWorker(s,self)
+                self.workers.append(streamerWorker(s,self))
 
     def start_tray(self):
         self.appindicator=gui.Trayicon(self)
+
+    def quit(self):
+        for k,v in self.workers.items():
+            v.stop()
+
+    def get_streamWorker_by_name(self,name):
+        for i in self.workers:
+            if i.name==name:
+                return i
 
 class streamerWorker():
     def __init__(self,workerName,controler):
@@ -58,13 +69,14 @@ class streamerWorker():
         self.config={}
         self.running=0
         self.status="stopped"
+        self.process=None
 
         self.total_size=0
         self.total_count=0
 
         self.actual={}
 
-        self.controler.workers[workerName]=self
+
         self.parse_config(controler.config)
 
         if self.config["autostart"] in ["True","true"]:
@@ -76,25 +88,30 @@ class streamerWorker():
             print ("worker='%s' config=%s'" % (self.name,self.config))
 
     def start(self):
-        self.thread=threading.Thread(target=self.run,name=self.name)
+        self.running=True
+        self.thread=threading.Thread(target=self.run, name=self.name)
         self.thread.start()
         self.status="running"
-        self.running=True
+
 
     def stop(self):
-        #self.thread.
+        print "try to stop thread %s" % self.name
         self.status="stopped"
         self.running=False
+        if self.process:
+            self.process.kill()
+        #self.thread.join()
 
     def run(self):
         #print self.config["url"],self.config["options"],"-d",self.config["output_directory"]
-        process=subprocess.Popen(["streamripper", self.config["url"],self.config["options"],"-d",self.config["output_directory"]],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.process=getattr(subprocess,"Popen")(["streamripper", self.config["url"],self.config["options"],"-d",self.config["output_directory"]],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         while self.running==True:
-            out=process.stdout.readline()
+            out=self.process.stdout.readline()
             if len(out)==0:
                 break
             self.process_output(out)
+        print "%s exiting" % self.name
 
 
 
