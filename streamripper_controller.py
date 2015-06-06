@@ -23,11 +23,12 @@ import sys
 import humanfriendly
 import time
 import streamripper_tray as gui
+import my_utils
 from gi.repository import Gtk
 
 class StopThread(StopIteration): pass
 
-class streamerControler:
+class streamercontroller:
     def __init__(self,**kwargs):
         self.workers=[]
         self.appindicator=None
@@ -39,9 +40,13 @@ class streamerControler:
         if config=={}:
             self.config=ConfigParser.ConfigParser()
             self.config.read([self.configFile])
-            print "actual config from streamerControler:\n %s with sections=%s" % (self.config,self.config.sections())
-
+            print "actual config from streamercontroller:\n %s with sections=%s" % (self.config,self.config.sections())
+            if len(self.config.sections())==0:
+                sys.exit("unable to load config file : aborting")
+                
+        self.test_config()
         self.parse_config()
+        
 
 
     def parse_config(self):
@@ -49,6 +54,13 @@ class streamerControler:
 
             if s !="general":
                 self.workers.append(streamerWorker(s,self))
+                
+    def test_config(self):
+        exe=self.config.get("general","streamripper_bin")
+        #test streamripper binary
+        if not my_utils.exe_exists(exe):
+            sys.exit("Could not find streamripper executable : %s" % exe)
+            
 
     def start_tray(self):
         self.appindicator=gui.Trayicon(self)
@@ -63,9 +75,9 @@ class streamerControler:
                 return i
 
 class streamerWorker():
-    def __init__(self,workerName,controler):
+    def __init__(self,workerName,controller):
         self.name=workerName
-        self.controler=controler
+        self.controller=controller
         self.config={}
         self.running=0
         self.status="stopped"
@@ -77,7 +89,7 @@ class streamerWorker():
         self.actual={}
 
 
-        self.parse_config(controler.config)
+        self.parse_config(controller.config)
 
         if self.config["autostart"] in ["True","true"]:
             self.start()
@@ -103,8 +115,16 @@ class streamerWorker():
         #self.thread.join()
 
     def run(self):
-        #print self.config["url"],self.config["options"],"-d",self.config["output_directory"]
-        self.process=getattr(subprocess,"Popen")(["streamripper", self.config["url"],self.config["options"],"-d",self.config["output_directory"]],stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        #preparing executable array
+        exe=[]
+        exe.append(self.controller.config.get("general","streamripper_bin"))
+        exe.append(self.config["url"])
+        for o in self.config["options"].split():
+            exe.append(o)
+        exe.append("-d")
+        exe.append(self.config["output_directory"])
+        print "start executing... %s" % exe
+        self.process=getattr(subprocess,"Popen")(exe,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
         while self.running==True:
             out=self.process.stdout.readline()
@@ -150,5 +170,5 @@ class streamerWorker():
 
 
 if __name__ == '__main__':
-    test=streamerControler()
+    test=streamercontroller()
     Gtk.main()
